@@ -13,7 +13,7 @@
 //
 // PROVIDED functions: commit_parse, commit_serialize, commit_walk, head_read, head_update
 // TODO functions:     commit_create
-
+#include <sys/stat.h>
 #include "commit.h"
 #include "index.h"
 #include "tree.h"
@@ -193,9 +193,46 @@ int head_update(const ObjectID *new_commit) {
 //   - head_update       : moves the branch pointer to your new commit
 //
 // Returns 0 on success, -1 on error.
-int commit_create(const char *message, ObjectID *commit_id_out) {
-    // TODO: Implement commit creation
-    // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
+int commit_create(const char *message, ObjectID *id_out) {
+    // 1. Build tree from index
+    ObjectID tree_id;
+    if (tree_from_index(&tree_id) != 0) {
+        return -1;
+    }
+
+    // 2. Convert tree hash to hex
+    char tree_hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(&tree_id, tree_hex);
+
+    // 3. Prepare commit content
+    char buffer[1024];
+    snprintf(buffer, sizeof(buffer),
+             "tree %s\n"
+             "author PES_User\n"
+             "message %s\n",
+             tree_hex, message);
+
+    // 4. Store commit object
+    if (object_write(OBJ_COMMIT, buffer, strlen(buffer), id_out) != 0) {
+        return -1;
+    }
+
+    // 5. Convert commit hash to hex
+    char commit_hex[HASH_HEX_SIZE + 1];
+    hash_to_hex(id_out, commit_hex);
+
+    // 6. Ensure directories exist
+    mkdir(".pes", 0755);
+    mkdir(".pes/refs", 0755);
+    mkdir(".pes/refs/heads", 0755);
+
+    // 7. Write commit hash to branch (VERY IMPORTANT)
+    FILE *fp = fopen(".pes/refs/heads/main", "w");
+    if (!fp) return -1;
+
+    fprintf(fp, "%s\n", commit_hex);
+    fflush(fp);
+    fclose(fp);
+
+    return 0;
 }
